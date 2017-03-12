@@ -6,6 +6,7 @@ Vector([1, 2, 3])
 """
 
 import math
+from decimal import Decimal
 
 import numpy as np
 
@@ -31,22 +32,103 @@ class Vector():
     >>> [x for x in v]
     [0, 5, 10]
     """
-    def __init__(v, coordinates):
-        if isinstance(coordinates, np.ndarray):
-            v._array = coordinates
-        else:
-            v._array = np.array(coordinates)
+
+    TOLERANCE = 1e-10
+    NORM_ZERO_ERR_MSG = 'cannot normalize the zero vector'
+
+    def __init__(v, coordinates, type=None):
+        if type:
+            coordinates = [type(x) for x in coordinates]
+        v._array = np.array(coordinates)
         v._coordinates = list(coordinates)
         v._cache = {}
+        v._type = type
 
     def __repr__(v):
-        return 'Vector({})'.format(v._coordinates)
+        if v._type is Decimal:
+            decs = ["'" + str(dec) + "'" for dec in v._coordinates]
+            coord = '[{}]'.format(', '.join(decs))
+            return 'Vector({}, type=Decimal)'.format(coord)
+        elif v._type:
+            return 'Vector({}, type={})'.format(v._coordinates,
+                                                v._type.__name__)
+        else:
+            return 'Vector({})'.format(v._coordinates)
 
     def __eq__(v, w):
-        return v._coordinates == w._coordinates
+        return (v - w).is_zero()
 
     def __iter__(v):
         return iter(v._coordinates)
+
+    def __getitem__(v, n):
+        return v._coordinates[n]
+
+    def __add__(v, w):
+        """
+        Vector addition
+
+        >>> Vector([1,1,1]) + Vector([2,2,2])
+        Vector([3, 3, 3])
+        """
+        if not isinstance(w, Vector):
+            raise TypeError(
+                'unsupported operand type(s) for +: \'%s\' and \'%s\'' %
+                (type(v).__name__, type(w).__name__))
+        elif v.dimension != w.dimension:
+            raise ValueError('addition undefined on vectors of different dimensions')
+        else:
+            return Vector(v._array + w._array, type=v._mix_types(w))
+
+    def __mul__(v, n):
+        """
+        Vector-scalar multiplication
+
+        >>> Vector([1,2,3]) * 3
+        Vector([3, 6, 9])
+        """
+        try:
+            if v._type is Decimal:
+                n = Decimal(n)
+            else:
+                float(n)
+        except ValueError:
+            raise TypeError(
+                'unsupported operand type(s) for *: \'%s\' and \'%s\'' %
+                (type(v).__name__, type(n).__name__))
+        return Vector(v._array * n, type=v._type)
+
+    def __rmul__(v, n):
+        """
+        Scalar-vector multiplication
+
+        >>> 3 * Vector([1,2,3])
+        Vector([3, 6, 9])
+        """
+        return v.__mul__(n)
+
+    def __sub__(v, w):
+        """
+        Vector substraction
+
+        >>> Vector([10,10,10]) - Vector([3,4,5])
+        Vector([7, 6, 5])
+        """
+        if not isinstance(w, Vector):
+            raise TypeError(
+                'unsupported operand type(s) for -: \'%s\' and \'%s\'' %
+                (type(v).__name__, type(w).__name__))
+        elif v.dimension != w.dimension:
+            raise ValueError('subtraction undefined on vectors of different dimensions')
+        else:
+            return Vector(v._array - w._array, type=v._mix_types(w))
+
+    def _mix_types(v, w):
+        return ((v._type is w._type) and v._type) or None
+
+    @property
+    def type(v):
+        return v._type
 
     @property
     def coordinates(v):
@@ -69,7 +151,11 @@ class Vector():
         5.0
         """
         if 'magnitude' not in v._cache:
-            v._cache['magnitude'] = math.sqrt((v._array ** 2).sum())
+            if v._type == Decimal:
+                mag = (v._array ** 2).sum().sqrt()
+            else:
+                mag = math.sqrt((v._array ** 2).sum())
+            v._cache['magnitude'] = mag
         return v._cache['magnitude']
 
     @property
@@ -81,73 +167,76 @@ class Vector():
         1.0
         """
         if 'normalized' not in v._cache:
-            if v.magnitude == 0:
-                raise ValueError('cannot normalize the zero vector')
-            v._cache['normalized'] = v * (1 / v.magnitude)
+            try:
+                v._cache['normalized'] = v * (1 / v.magnitude)
+            except ZeroDivisionError:
+                raise ValueError(v.NORM_ZERO_ERR_MSG)
         return v._cache['normalized']
 
     def inner(v, w):
         """
-        Inner product
+        Inner product v with w
 
         >>> Vector([1,2,3]).inner(Vector([3,2,1]))
         10
         """
-        return (v._array * w._array).sum()
+        try:
+            return (v._array * w._array).sum()
+        except ValueError as e:
+            if v.dimension != w.dimension:
+                raise ValueError(
+                    'inner product undefined on vectors of different dimensions')
+            else:
+                raise e
 
     def angle(v, w):
         """
-        Angle between vectors
+        Angle between vectors v and w, in radians
 
         >>> Vector([1,0]).angle(Vector([0,2]))
         1.5707963267948966
         """
-        if (v.magnitude * w.magnitude) == 0:
-            raise ValueError('angle undefined for the zero vector')
-        return math.acos(v.inner(w) * (1 / (v.magnitude * w.magnitude)))
+        try:
+            return math.acos(v.inner(w) * (1 / (v.magnitude * w.magnitude)))
+        except ValueError as e:
+            if str(e) == v.NORM_ZERO_ERR_MSG:
+                raise ValueError('angle with the zero vector undefined')
+            elif v.dimension != w.dimension:
+                raise ValueError(
+                    'angle undefined on vectors of different dimensions')
+            else:
+                raise e
 
-    def __add__(v, w):
+    def projected(v, w):
         """
-        Vector addition
+        v projected onto w
 
-        >>> Vector([1,1,1]) + Vector([2,2,2])
-        Vector([3, 3, 3])
+        >>> v = Vector(['1.0', '0.0'], type=Decimal)
+        >>> w = Vector(['0.5', '0.5'], type=Decimal)
+        >>> v.projected(w)
+        Vector(['0.5', '0.5'], type=Decimal)
         """
-        if not isinstance(w, Vector):
-            raise TypeError(
-                'unsupported operand type(s) for +: \'%s\' and \'%s\'' %
-                (type(v).__name__, type(w).__name__))
-        elif v.dimension != w.dimension:
-            raise ValueError('cannot add vectors of different dimensions')
+        return w * (v.inner(w) / (w.magnitude ** 2))
+
+    def is_zero(v):
+        if v._type == Decimal:
+            return v.magnitude == Decimal(0)
         else:
-            return Vector(v._array + w._array)
+            return v.magnitude < v.TOLERANCE
 
-    def __mul__(v, n):
-        """
-        Vector-scalar multiplication
+    def is_orthogonal(v, w):
+        if v._type == Decimal:
+            return v.inner(w) == Decimal(0)
+        else:
+            return abs(v.inner(w)) < v.TOLERANCE
 
-        >>> Vector([1,2,3]) * 3
-        Vector([3, 6, 9])
-        """
-        return Vector(v._array * n)
-
-    def __rmul__(v, n):
-        """
-        Scalar-vector multiplication
-
-        >>> 3 * Vector([1,2,3])
-        Vector([3, 6, 9])
-        """
-        return v.__mul__(n)
-
-    def __sub__(v, w):
-        """
-        Vector substraction
-
-        >>> Vector([10,10,10]) - Vector([3,4,5])
-        Vector([7, 6, 5])
-        """
-        return Vector(v._array - w._array)
+    def is_parallel(v, w):
+        return (
+            v.is_zero() or
+            w.is_zero() or
+            v.normalized == w.normalized or
+            v.normalized * -1 == w.normalized
+        )
 
 
 if __name__ == '__main__':
