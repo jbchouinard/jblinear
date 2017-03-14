@@ -1,0 +1,25 @@
+(define (make-table)
+  '(table end))
+
+(define (insert! lst el)
+  (let ((head (car lst))
+	(rest (cdr lst)))
+    (set-car! lst el)
+    (set-cdr! lst (cons head rest))))
+
+(define (table-set table key value)
+  (define (set-iter tbl)
+    (let ((current (car tbl))
+	  (rest (cdr tbl)))
+      (cond ((eq? current 'end) (insert! tbl (list key value)))
+	    ((eq? (car current) key) (set-cdr! current (list value)))
+	    (else (set-iter rest)))))
+  (if (eq? (car table) 'table)
+    (set-iter (cdr table))
+    (error "TABLE-SET -- not a table")))
+
+(define (make-vector coords)
+  (list 'vector coords '()))
+
+(define (vector-dimension vec)
+  (length (cadr vec)))
