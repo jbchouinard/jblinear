@@ -62,6 +62,13 @@ class Vector():
         return iter(v._coordinates)
 
     def __getitem__(v, n):
+        if v.dimension <= 3:
+            if n == 'x':
+                n = 0
+            elif n == 'y':
+                n = 1
+            elif n == 'z':
+                n = 2
         return v._coordinates[n]
 
     def __add__(v, w):
@@ -189,6 +196,26 @@ class Vector():
             else:
                 raise e
 
+    def cross(v, w):
+        """
+        Cross product
+
+        >>> a = Vector([1.0, 0.0, 0.0])
+        >>> b = Vector([0.0, 1.0, 0.0])
+        >>> a.cross(b)
+        Vector([0.0, 0.0, 1.0])
+        >>> b.cross(a)
+        Vector([0.0, 0.0, -1.0])
+        """
+        if not (v.dimension == w.dimension == 3):
+            raise ValueError(
+                'cross product only defined for 3-dimensional vectors')
+        return Vector([
+           v['y']*w['z'] - w['y']*v['z'],
+           w['x']*v['z'] - v['x']*w['z'],
+           v['x']*w['y'] - w['x']*v['y'],
+        ])
+
     def angle(v, w):
         """
         Angle between vectors v and w, in radians
@@ -207,7 +234,7 @@ class Vector():
             else:
                 raise e
 
-    def projected(v, w):
+    def projected(v, basis):
         """
         v projected onto w
 
@@ -216,19 +243,13 @@ class Vector():
         >>> v.projected(w)
         Vector(['0.5', '0.5'], type=Decimal)
         """
-        return w * (v.inner(w) / (w.magnitude ** 2))
+        return basis * (v.inner(basis) / (basis.magnitude ** 2))
 
     def is_zero(v):
-        if v._type == Decimal:
-            return v.magnitude == Decimal(0)
-        else:
-            return v.magnitude < v.TOLERANCE
+        return v.magnitude < v.TOLERANCE
 
     def is_orthogonal(v, w):
-        if v._type == Decimal:
-            return v.inner(w) == Decimal(0)
-        else:
-            return abs(v.inner(w)) < v.TOLERANCE
+        return abs(v.inner(w)) < v.TOLERANCE
 
     def is_parallel(v, w):
         return (
@@ -239,6 +260,34 @@ class Vector():
         )
 
 
+def area_of_parallelogram(v, w):
+    return v.cross(w).magnitude
+
+
+def area_of_triangle(v, w):
+    return 0.5 * area_of_parallelogram(v, w)
+
+
+def exercises():
+    V = Vector
+
+    # Coding cross products
+    v = V([8.462, 7.893, -8.187])
+    w = V([6.984, -5.975, 4.778])
+    print('{} cross {} is {}\n'.format(v, w, v.cross(w)))
+
+    v = V([-8.987, -9.838, 5.031])
+    w = V([-4.268, -1.861, -8.866])
+    print('area of parallelogram spanned by {} and {} is {}\n'
+          .format(v, w, area_of_parallelogram(v, w)))
+
+    v = V([1.5, 9.547, 3.691])
+    w = V([-6.007, 0.124, 5.772])
+    print('area of triangle spanned by {} and {} is {}\n'
+          .format(v, w, area_of_triangle(v, w)))
+
+
 if __name__ == '__main__':
+    exercises()
     import doctest
     doctest.testmod()
